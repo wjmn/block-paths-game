@@ -11,6 +11,61 @@ import String
 import Maybe exposing (..)
 import Json.Decode as Decode
 
+-- EXAMPLE BOARD ---------------------------------------------------------------
+
+exampleBoard = [ { coords = [ Coord 4 4
+                            , Coord 8 4
+                            , Coord 8 18
+                            , Coord 26 18
+                            , Coord 26 28
+                            , Coord 28 28]
+                 , on = True}
+               , { coords = [ Coord 4 28
+                            , Coord 7 28
+                            , Coord 7 7
+                            , Coord 28 7
+                            , Coord 28 4]
+                 , on = True}
+               , { coords = [ Coord 12 20
+                            , Coord 12 17
+                            , Coord 9 17
+                            , Coord 9 12
+                            , Coord 12 12]
+                 , on = True}
+               , { coords = [ Coord 20 20
+                            , Coord 20 24
+                            , Coord 10 24
+                            , Coord 10 8
+                            , Coord 20 8
+                            , Coord 20 12]
+                 , on = True }
+               , { coords = [ Coord 12 28
+                            , Coord 12 30
+                            , Coord 2 30
+                            , Coord 2 12
+                            , Coord 4 12]
+                 , on = True}
+               , { coords = [ Coord 4 20
+                            , Coord 4 25
+                            , Coord 20 25
+                            , Coord 20 28]
+                 , on = True}
+               , { coords = [ Coord 12 4
+                            , Coord 12 9
+                            , Coord 16 9
+                            , Coord 16 16
+                            , Coord 28 16
+                            , Coord 28 20]
+                 , on = True}
+               , { coords = [ Coord 20 4
+                            , Coord 20 6
+                            , Coord 24 6
+                            , Coord 24 12
+                            , Coord 28 12]
+                 , on = True}]
+
+exampleWin = List.map2 (\x y -> {x | on = y}) exampleBoard [False, False, False, False, True, True, True, True]
+
 -- LOGIC -----------------------------------------------------------------------
 
 type alias Coord = { x : Int
@@ -60,21 +115,8 @@ type alias Model = { currentBoard : Board
                    , playerOnBoard : Bool
                    , hasWon : Bool }
 
-testPath = [ Coord 5 5
-           , Coord 10 5
-           , Coord 10 8
-           , Coord 15 8]
-testPath2 = [ Coord 5 15
-           , Coord 10 15
-           , Coord 10 12
-           , Coord 15 12]
-testBoard = [ {coords = testPath, on = True}
-            , {coords = testPath2, on = True}]
-testWin = [ {coords = testPath, on = True}
-            , {coords = testPath2, on = False}]
-
-initialModel = { currentBoard = testBoard
-                , winBoard = testWin
+initialModel = { currentBoard = exampleBoard
+                , winBoard = exampleWin
                 , boxOn = False
                 , boxSize = 3
                 , boxMinLoc = Coord 0 0
@@ -118,9 +160,17 @@ transformBoard model newBoxMinLoc =
 boardOnClick : Int -> Int -> Svg.Attribute Msg
 boardOnClick boardSize coordLim =
   let
-    decoder = Decode.map2 (\x y -> BoardClick x y boardSize coordLim) (Decode.at ["pageX"] Decode.int) (Decode.at ["pageY"] Decode.int)
+    decoder = Decode.map2 (\x y -> BoardClick x y boardSize coordLim) (Decode.field "pageX" Decode.int) (Decode.field "pageY" Decode.int)
   in
     Events.on "click" decoder
+
+
+coordDecoder : Decode.Decoder Coord
+coordDecoder = Decode.map2 Coord (Decode.field "x" Decode.int) (Decode.field "y" Decode.int)
+
+pathDecoder : Decode.Decoder Path
+pathDecoder = Decode.map2 Path (Decode.field "coords" (Decode.list coordDecoder)) (Decode.field "on" Decode.bool)
+
 
 -- VIEW ------------------------------------------------------------------------
 
@@ -134,11 +184,15 @@ pathToSvgString path = List.foldl (\s1 s2 -> s1 ++ " " ++ s2) ""
 pathPolyline : Path -> Svg msg
 pathPolyline path = case path.on of
                         True -> polyline [ fill  "none"
-                                         , stroke "#ffa0a0"
+                                         , stroke "red"
+                                         , strokeWidth "0.4"
+                                         , strokeOpacity "0.4"
                                          , points (pathToSvgString path.coords)]
                                 []
                         False -> polyline [ fill "none"
-                                          , stroke "#a5a5a5"
+                                          , stroke "#666666"
+                                          , strokeWidth "0.3"
+                                          , strokeOpacity "0.5"
                                           , points (pathToSvgString path.coords)]
                                  []
 
@@ -150,7 +204,7 @@ pathNodes path =
         colourState on = case on of
                              True -> "red"
                              False -> "black"
-        nodeSize = 2
+        nodeSize = 3
         nodeMake fn = case fn of
                         Just node -> rect [ x (String.fromFloat (toFloat(node.x) - (nodeSize / 2)))
                                           , y (String.fromFloat (toFloat(node.y) - (nodeSize / 2)))
@@ -170,7 +224,8 @@ gridSvg size =
                             , height "2"
                             , fill "transparent"
                             , stroke "#aaaaaa"
-                            , strokeWidth "0.1"]
+                            , strokeWidth "0.05"
+                            , strokeOpacity "0.5"]
                        []
         gridRow row = List.map (\n -> gridUnit n row) (List.range 0 size)
     in
@@ -189,7 +244,7 @@ listToString sep xs =
 boardToSvg : BoardType -> Int -> Board -> Bool -> Int -> Coord -> Html Msg
 boardToSvg boardType boardSize board boxOn boxSize boxMinLoc =
     let
-        coordLimit = 20
+        coordLimit = 32
         bleed = 0.5
         boxToSvg on = case on of
                           True -> rect [ x (String.fromFloat ((toFloat boxMinLoc.x) - (bleed / 2)))
@@ -222,9 +277,9 @@ boardToSvg boardType boardSize board boxOn boxSize boxMinLoc =
                             , height (String.fromInt boardSize)
                             , viewBox (listToString " " [coordLimit, coordLimit, 0, 0])]
                         ((List.map pathPolyline board) ++
-                             (List.foldr (++) [] (List.map pathNodes board)) ++ 
                              (gridSvg coordLimit) ++
-                             [(boxToSvg boxOn)] ++ 
+                             (List.foldr (++) [] (List.map pathNodes board)) ++ 
+                              [(boxToSvg boxOn)] ++ 
                              [fullBoardRect])
 
                 Goal -> svg [ width (String.fromInt boardSize)
