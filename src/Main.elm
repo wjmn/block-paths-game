@@ -126,12 +126,20 @@ initialModel = { currentBoard = exampleBoard
 
 -- UPDDATE ---------------------------------------------------------------------
 
-type Msg = MouseMove | BoardClick Int Int Int Int
+type Msg = MouseMove Int Int Int Int | BoardClick Int Int Int Int
 
 update msg model =
   case msg of
-    MouseMove ->
-      model
+    MouseMove x y size lim ->
+        let
+            _ = Debug.log "x is" x
+            modifier = (toFloat lim) / (toFloat size)
+            newPlayerHoverLoc = Coord (round ((toFloat x) * modifier) - 2) (round ((toFloat y) * modifier) - 2)
+        in
+            { model
+                | playerOnBoard = True
+                , playerHoverLoc = newPlayerHoverLoc
+            }
 
     BoardClick x y size lim ->
         let
@@ -152,8 +160,6 @@ transformBoard model newBoxMinLoc =
     let
         bbox = { min = newBoxMinLoc
                , max = Coord (newBoxMinLoc.x + model.boxSize) (newBoxMinLoc.y + model.boxSize)}
-        _ = Debug.log "bbox" bbox
-        _ = Debug.log "model" model
     in
         List.map (\path -> {path | on = not (isIntersect bbox path.coords)}) model.currentBoard
 
@@ -163,6 +169,13 @@ boardOnClick boardSize coordLim =
     decoder = Decode.map2 (\x y -> BoardClick x y boardSize coordLim) (Decode.field "pageX" Decode.int) (Decode.field "pageY" Decode.int)
   in
     Events.on "click" decoder
+
+boardOnMouseMove : Int -> Int -> Svg.Attribute Msg
+boardOnMouseMove boardSize coordLim =
+  let
+    decoder = Decode.map2 (\x y -> MouseMove x y boardSize coordLim) (Decode.field "offsetX" Decode.int) (Decode.field "offsetY" Decode.int)
+  in
+    Events.on "mousemove" decoder
 
 
 coordDecoder : Decode.Decoder Coord
@@ -241,17 +254,18 @@ listToString sep xs =
                 List.foldl (\s1 s2 -> s1 ++ sep ++ s2) n ns
             [] -> ""
 
-boardToSvg : BoardType -> Int -> Board -> Bool -> Int -> Coord -> Html Msg
-boardToSvg boardType boardSize board boxOn boxSize boxMinLoc =
+boardToSvg : BoardType -> Int -> Board -> Bool -> Int -> Coord -> Bool -> Coord -> Html Msg
+boardToSvg boardType boardSize board boxOn boxSize boxMinLoc playerOnBoard playerHoverLoc=
     let
         coordLimit = 32
         bleed = 0.5
-        boxToSvg on = case on of
+        boxToSvg on fillString opacityString = case on of
                           True -> rect [ x (String.fromFloat ((toFloat boxMinLoc.x) - (bleed / 2)))
                                        , y (String.fromFloat ((toFloat boxMinLoc.y) - (bleed / 2)))
                                        , width (String.fromFloat ((toFloat boxSize) + bleed))
                                        , height (String.fromFloat ((toFloat boxSize) + bleed))
-                                       , fill "blue"]
+                                       , fill fillString
+                                       , opacity opacityString]
                                   []
                           False -> rect [x "0", y "0", fill "transparent", width "0", height "0"]
                                    []
@@ -277,9 +291,10 @@ boardToSvg boardType boardSize board boxOn boxSize boxMinLoc =
                             , height (String.fromInt boardSize)
                             , viewBox (listToString " " [coordLimit, coordLimit, 0, 0])]
                         ((List.map pathPolyline board) ++
+                             [(boxToSvg playerOnBoard "#bbbbbb" "1")] ++
                              (gridSvg coordLimit) ++
                              (List.foldr (++) [] (List.map pathNodes board)) ++ 
-                              [(boxToSvg boxOn)] ++ 
+                              [(boxToSvg boxOn "blue" "1")] ++ 
                              [fullBoardRect])
 
                 Goal -> svg [ width (String.fromInt boardSize)
@@ -300,8 +315,10 @@ winScreen hasWon =
 
 view model =
   div []
-    [ (boardToSvg Play 300 model.currentBoard model.boxOn model.boxSize model.boxMinLoc)
-    , (boardToSvg Goal 300 model.winBoard model.boxOn model.boxSize model.boxMinLoc)
+    [ (boardToSvg Play 300 model.currentBoard model.boxOn model.boxSize model.boxMinLoc
+       model.playerOnBoard model.playerHoverLoc)
+    , (boardToSvg Goal 300 model.winBoard model.boxOn model.boxSize model.boxMinLoc
+      model.playerOnBoard model.playerHoverLoc)
     , (winScreen model.hasWon)
     ]
 
