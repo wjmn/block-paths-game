@@ -113,6 +113,7 @@ type alias Model = { currentBoard : Board
                    , boxMinLoc : Coord
                    , playerHoverLoc : Coord
                    , playerOnBoard : Bool
+                   , numMoves : Int
                    , hasWon : Bool }
 
 initialModel = { currentBoard = exampleBoard
@@ -122,11 +123,13 @@ initialModel = { currentBoard = exampleBoard
                 , boxMinLoc = Coord 0 0
                 , playerHoverLoc = Coord 0 0
                 , playerOnBoard = False
+                , numMoves = 0
                 , hasWon = False}
 
 -- UPDDATE ---------------------------------------------------------------------
 
-type Msg = MouseMove Int Int Int Int | BoardClick Int Int Int Int
+type Msg = MouseMove Int Int Int Int
+         | BoardClick Int Int Int Int
 
 update msg model =
   case msg of
@@ -148,12 +151,14 @@ update msg model =
             newBoxMinLoc = Coord (round ((toFloat x) * modifier) - 2) (round ((toFloat y) * modifier) - 2)
             newBoard = transformBoard model newBoxMinLoc
             newHasWon = (newBoard == model.winBoard)
+            newNumMoves = model.numMoves + 1
         in
             ({ model
                 | boxOn = True
                 , boxMinLoc = newBoxMinLoc
                 , currentBoard = newBoard
                 , hasWon = newHasWon
+                , numMoves = newNumMoves
             },
                  Cmd.none
                  )
@@ -320,9 +325,10 @@ view model =
   div [class "main-frame"]
     [ (boardToSvg Play 300 model.currentBoard model.boxOn model.boxSize model.boxMinLoc
        model.playerOnBoard model.playerHoverLoc)
-    , (boardToSvg Goal 300 model.winBoard model.boxOn model.boxSize model.boxMinLoc
+    , (boardToSvg Goal 100 model.winBoard model.boxOn model.boxSize model.boxMinLoc
       model.playerOnBoard model.playerHoverLoc)
     , (winScreen model.hasWon)
+    , div [] [text (String.fromInt model.numMoves)]
     ]
 
 -- MAIN ------------------------------------------------------------------------
