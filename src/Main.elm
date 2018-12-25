@@ -136,24 +136,27 @@ update msg model =
             modifier = (toFloat lim) / (toFloat size)
             newPlayerHoverLoc = Coord (round ((toFloat x) * modifier) - 2) (round ((toFloat y) * modifier) - 2)
         in
-            { model
+            ({ model
                 | playerOnBoard = True
                 , playerHoverLoc = newPlayerHoverLoc
-            }
+            }, Cmd.none)
 
     BoardClick x y size lim ->
         let
+            _ = Debug.log "x is" x
             modifier = (toFloat lim) / (toFloat size)
             newBoxMinLoc = Coord (round ((toFloat x) * modifier) - 2) (round ((toFloat y) * modifier) - 2)
             newBoard = transformBoard model newBoxMinLoc
             newHasWon = (newBoard == model.winBoard)
         in
-            { model
+            ({ model
                 | boxOn = True
                 , boxMinLoc = newBoxMinLoc
                 , currentBoard = newBoard
                 , hasWon = newHasWon
-            }
+            },
+                 Cmd.none
+                 )
 
 transformBoard : Model -> Coord -> Board
 transformBoard model newBoxMinLoc =
@@ -166,7 +169,7 @@ transformBoard model newBoxMinLoc =
 boardOnClick : Int -> Int -> Svg.Attribute Msg
 boardOnClick boardSize coordLim =
   let
-    decoder = Decode.map2 (\x y -> BoardClick x y boardSize coordLim) (Decode.field "pageX" Decode.int) (Decode.field "pageY" Decode.int)
+    decoder = Decode.map2 (\x y -> BoardClick x y boardSize coordLim) (Decode.field "offsetX" Decode.int) (Decode.field "offsetY" Decode.int)
   in
     Events.on "click" decoder
 
@@ -314,7 +317,7 @@ winScreen hasWon =
             div [] []
 
 view model =
-  div []
+  div [class "main-frame"]
     [ (boardToSvg Play 300 model.currentBoard model.boxOn model.boxSize model.boxMinLoc
        model.playerOnBoard model.playerHoverLoc)
     , (boardToSvg Goal 300 model.winBoard model.boxOn model.boxSize model.boxMinLoc
@@ -323,5 +326,11 @@ view model =
     ]
 
 -- MAIN ------------------------------------------------------------------------
+main : Program () Model Msg
 main =
-  Browser.sandbox { init = initialModel, update = update, view = view }
+    Browser.element
+        { view = view
+        , init = \_ -> (initialModel, Cmd.none)
+        , update = update
+        , subscriptions = always Sub.none
+        }
