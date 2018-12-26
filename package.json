@@ -1,0 +1,27 @@
+{
+  "name": "block-paths-game",
+  "version": "1.0.0",
+  "description": "This project is bootstrapped with [Create Elm App](https://github.com/halfzebra/create-elm-app).",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "build-css": "node-sass-chokidar src/ -o src/",
+      "watch-css": "npm run build-css && node-sass-chokidar src/ -o src/ --watch --recursive"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wjmn/block-paths-game.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/wjmn/block-paths-game/issues"
+  },
+  "homepage": "https://github.com/wjmn/block-paths-game#readme",
+  "dependencies": {
+    "node-sass-chokidar": "^1.3.4"
+  }
+}
