@@ -17,6 +17,17 @@ import Time exposing (..)
 
 
 --------------------------------------------------------------------------------
+-- TODOS
+--------------------------------------------------------------------------------
+{-
+   - Timer
+   - Colourise paths and nodes
+   - Aesthetics
+   - Score calculation
+   - Random board generation algorithms
+
+-}
+--------------------------------------------------------------------------------
 -- TYPES
 --------------------------------------------------------------------------------
 
@@ -80,7 +91,7 @@ type alias Coord =
 
 type alias Path =
     { coords : List Coord
-    , on : Bool
+    , blocked : Bool
     }
 
 
@@ -184,42 +195,75 @@ update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
     case msg of
         MouseMove x y ->
-            ( model, Cmd.none )
+            case model.screen of
+                BoardScreen level ->
+                    case level.hasWonBoard of
+                        True ->
+                            ( model, Cmd.none )
+
+                        False ->
+                            let
+                                modifier =
+                                    toFloat level.boardParams.coordLim / toFloat model.boardSize
+
+                                halfBoxSize =
+                                    toFloat level.boardParams.boxSize / 2
+
+                                newPlayerMinLoc =
+                                    Coord (round (toFloat x * modifier - halfBoxSize)) (round (toFloat y * modifier - halfBoxSize))
+                            in
+                            ( { model
+                                | screen =
+                                    BoardScreen
+                                        { level
+                                            | playerMinPos = Just newPlayerMinLoc
+                                        }
+                              }
+                            , Cmd.none
+                            )
+
+                _ ->
+                    ( model, Cmd.none )
 
         BoardClick x y ->
             case model.screen of
                 BoardScreen level ->
-                    let
-                        modifier =
-                            toFloat level.boardParams.coordLim / toFloat model.boardSize
+                    case level.hasWonBoard of
+                        True ->
+                            ( model, Cmd.none )
 
-                        halfBoxSize =
-                            toFloat level.boardParams.boxSize / 2
+                        False ->
+                            let
+                                modifier =
+                                    toFloat level.boardParams.coordLim / toFloat model.boardSize
 
-                        newBoxMinLoc =
-                            Coord (round (toFloat x * modifier - halfBoxSize)) (round (toFloat y * modifier - halfBoxSize))
+                                halfBoxSize =
+                                    toFloat level.boardParams.boxSize / 2
 
-                        newBoard =
-                            transformBoard level newBoxMinLoc
+                                newBoxMinLoc =
+                                    Coord (round (toFloat x * modifier - halfBoxSize)) (round (toFloat y * modifier - halfBoxSize))
 
-                        newHasWonBoard =
-                            newBoard == level.winBoard
+                                newBoard =
+                                    transformBoard level newBoxMinLoc
 
-                        newNumMoves =
-                            model.numMoves + 1
-                    in
-                    ( { model
-                        | screen =
-                            BoardScreen
-                                { level
-                                    | boxMinPos = Just newBoxMinLoc
-                                    , currentBoard = newBoard
-                                    , hasWonBoard = newHasWonBoard
-                                }
-                        , numMoves = newNumMoves
-                      }
-                    , Cmd.none
-                    )
+                                newHasWonBoard =
+                                    newBoard == level.winBoard
+
+                                newNumMoves =
+                                    model.numMoves + 1
+                            in
+                            ( { model
+                                | screen =
+                                    BoardScreen
+                                        { level
+                                            | boxMinPos = Just newBoxMinLoc
+                                            , currentBoard = newBoard
+                                            , hasWonBoard = newHasWonBoard
+                                        }
+                                , numMoves = newNumMoves
+                              }
+                            , Cmd.none
+                            )
 
                 _ ->
                     ( model, Cmd.none )
@@ -227,7 +271,7 @@ update msg model =
         SeeBoardScreenAction ->
             let
                 seed =
-                    Random.initialSeed 0
+                    Random.initialSeed model.clockTime
             in
             case model.screen of
                 StartScreen ->
@@ -262,7 +306,7 @@ update msg model =
             ( initialModel, Cmd.none )
 
         TickClock ->
-            ( model, Cmd.none )
+            ( { model | clockTime = model.clockTime + 1 }, Cmd.none )
 
 
 genNewBoardParams : Random.Seed -> BoardNum -> BoardParams
@@ -270,8 +314,8 @@ genNewBoardParams _ boardNum =
     case boardNum of
         0 ->
             { coordLim = 16
-            , numPaths = 1
-            , numNodes = 3
+            , numPaths = 2
+            , numNodes = 2
             , boardGenMethod = Ordered Line
             , winType = LessNodes
             , boxSize = 2
@@ -279,53 +323,53 @@ genNewBoardParams _ boardNum =
 
         1 ->
             { coordLim = 16
-            , numPaths = 2
-            , numNodes = 4
+            , numPaths = 3
+            , numNodes = 2
             , boardGenMethod = Ordered Square
             , winType = LessNodes
             , boxSize = 2
             }
 
         2 ->
-            { coordLim = 24
+            { coordLim = 16
             , numPaths = 4
-            , numNodes = 6
+            , numNodes = 2
             , boardGenMethod = Ordered Line
             , winType = MoreNodes
-            , boxSize = 4
+            , boxSize = 2
             }
 
         3 ->
-            { coordLim = 36
-            , numPaths = 4
-            , numNodes = 8
+            { coordLim = 16
+            , numPaths = 5
+            , numNodes = 3
             , boardGenMethod = Ordered Triangle
             , winType = MoreNodes
-            , boxSize = 4
+            , boxSize = 2
             }
 
         4 ->
-            { coordLim = 36
-            , numPaths = 4
-            , numNodes = 8
+            { coordLim = 16
+            , numPaths = 6
+            , numNodes = 3
             , boardGenMethod = Ordered Square
             , winType = MoreNodes
-            , boxSize = 4
+            , boxSize = 2
             }
 
         5 ->
-            { coordLim = 48
-            , numPaths = 10
-            , numNodes = 10
+            { coordLim = 16
+            , numPaths = 7
+            , numNodes = 3
             , boardGenMethod = Random
             , winType = LessNodes
             , boxSize = 4
             }
 
         6 ->
-            { coordLim = 48
-            , numPaths = 12
-            , numNodes = 12
+            { coordLim = 20
+            , numPaths = 8
+            , numNodes = 4
             , boardGenMethod = Random
             , winType = MoreNodes
             , boxSize = 4
@@ -369,10 +413,10 @@ genPathFromLength s0 length lim =
     in
     case yFirst of
         True ->
-            ( { coords = List.map (\( c1, c2 ) -> { x = c1, y = c2 }) coordsCandidate, on = True }, s3 )
+            ( { coords = List.map (\( c1, c2 ) -> { x = c1, y = c2 }) coordsCandidate, blocked = False }, s3 )
 
         False ->
-            ( { coords = List.map (\( c2, c1 ) -> { x = c1, y = c2 }) coordsCandidate, on = True }, s3 )
+            ( { coords = List.map (\( c2, c1 ) -> { x = c1, y = c2 }) coordsCandidate, blocked = False }, s3 )
 
 
 randBool : Random.Generator Bool
@@ -401,7 +445,7 @@ genNewBoard s0 params =
                     List.map (\( p, s ) -> p) (scanl (\a ( _, b ) -> genPathFromLength b a params.coordLim) initial xs)
 
                 [] ->
-                    [ { coords = [ { x = 0, y = 0 } ], on = True } ]
+                    [ { coords = [ { x = 0, y = 0 } ], blocked = False } ]
 
 
 genNewWinBoard : Random.Seed -> Board -> BoardParams -> ( Board, Random.Seed )
@@ -414,14 +458,17 @@ genNewWinBoard s0 board params =
             { min = Coord x y, max = Coord (x + params.boxSize) (y + params.boxSize) }
 
         candidateBoard =
-            List.map (\p -> { p | on = isIntersect bbox p.coords }) board
+            List.map (\p -> { p | blocked = isIntersect bbox p.coords }) board
 
         intersections =
-            List.foldr (||) False (List.map (\b -> b.on) candidateBoard)
+            List.foldr (||) False (List.map (\b -> b.blocked) candidateBoard)
     in
     case intersections of
-        _ ->
+        True ->
             ( candidateBoard, s1 )
+
+        False ->
+            genNewWinBoard s1 board params
 
 
 
@@ -461,7 +508,7 @@ transformBoard level newBoxMinLoc =
             , max = Coord (newBoxMinLoc.x + level.boardParams.boxSize) (newBoxMinLoc.y + level.boardParams.boxSize)
             }
     in
-    List.map (\path -> { path | on = not (isIntersect bbox path.coords) }) level.currentBoard
+    List.map (\path -> { path | blocked = isIntersect bbox path.coords }) level.currentBoard
 
 
 boardOnClick : Svg.Attribute Msg
@@ -489,7 +536,7 @@ coordDecoder =
 
 pathDecoder : Decode.Decoder Path
 pathDecoder =
-    Decode.map2 Path (Decode.field "coords" (Decode.list coordDecoder)) (Decode.field "on" Decode.bool)
+    Decode.map2 Path (Decode.field "coords" (Decode.list coordDecoder)) (Decode.field "blocked" Decode.bool)
 
 
 
@@ -507,20 +554,20 @@ pathToSvgString path =
         )
 
 
-pathPolyline : Path -> Svg msg
-pathPolyline path =
-    case path.on of
-        True ->
+pathPolyline : Path -> Int -> Svg msg
+pathPolyline path hue =
+    case path.blocked of
+        False ->
             polyline
                 [ fill "none"
-                , stroke "red"
-                , strokeWidth "0.4"
+                , stroke (makeHslString hue)
+                , strokeWidth "0.3"
                 , strokeOpacity "0.4"
                 , points (pathToSvgString path.coords)
                 ]
                 []
 
-        False ->
+        True ->
             polyline
                 [ fill "none"
                 , stroke "#666666"
@@ -531,8 +578,13 @@ pathPolyline path =
                 []
 
 
-pathNodes : Path -> BoardType -> List (Svg msg)
-pathNodes path boardType =
+makeHslString : Int -> String
+makeHslString hue =
+    "hsl(" ++ String.fromInt hue ++ ", 80%, 50%)"
+
+
+pathNodes : Path -> BoardType -> Int -> List (Svg msg)
+pathNodes path boardType hue =
     let
         firstNode =
             List.head path.coords
@@ -540,12 +592,12 @@ pathNodes path boardType =
         lastNode =
             List.head (List.reverse path.coords)
 
-        colourState on =
-            case on of
-                True ->
-                    "red"
-
+        colourState blocked =
+            case blocked of
                 False ->
+                    makeHslString hue
+
+                True ->
                     "black"
 
         nodeSize =
@@ -554,7 +606,7 @@ pathNodes path boardType =
                     1
 
                 Goal ->
-                    3
+                    1
 
         nodeMake fn =
             case fn of
@@ -564,7 +616,8 @@ pathNodes path boardType =
                         , y (String.fromFloat (toFloat node.y - (nodeSize / 2)))
                         , width (String.fromInt nodeSize)
                         , height (String.fromInt nodeSize)
-                        , fill (colourState path.on)
+                        , opacity "0.6"
+                        , fill (colourState path.blocked)
                         ]
                         []
 
@@ -588,9 +641,9 @@ gridSvg size =
                 []
 
         gridRow row =
-            List.map (\n -> gridUnit (2 * n) (2 * row)) (List.range 0 (size // 2))
+            List.map (\n -> gridUnit (2 * n + 1) (2 * row + 1)) (List.range 0 (size // 2))
     in
-    List.foldr (++) [] (List.map gridRow (List.range 0 (size // 2)))
+    List.foldr (++) [] (List.map gridRow (List.range 0 size))
 
 
 listToString : String -> List Int -> String
@@ -622,6 +675,14 @@ boardToSvg boardType level boardSize =
         bleed =
             0.5
 
+        borderColour =
+            case level.hasWonBoard of
+                True ->
+                    "#62d052"
+
+                False ->
+                    "#fe7b95ff"
+
         boxToSvg objMinPos fillString opacityString =
             case objMinPos of
                 Just boxMinLoc ->
@@ -639,32 +700,41 @@ boardToSvg boardType level boardSize =
                     rect [ x "0", y "0", fill "transparent", width "0", height "0" ]
                         []
 
-        fullBoardRect =
-            case boardType of
-                Play ->
-                    rect
-                        [ x "0"
-                        , y "0"
-                        , width (String.fromInt boardParams.coordLim)
-                        , height (String.fromInt boardParams.coordLim)
-                        , fill "transparent"
-                        , stroke "black"
-                        , strokeWidth "2"
-                        , boardOnClick
-                        ]
-                        []
+        bgRect =
+            rect
+                [ x "0.1"
+                , y "0.1"
+                , rx "1"
+                , ry "1"
+                , width (String.fromFloat (toFloat boardParams.coordLim - 0.2))
+                , height (String.fromFloat (toFloat boardParams.coordLim - 0.2))
+                , fill "white"
+                , stroke borderColour
+                , strokeWidth "0.25"
+                ]
+                []
 
-                Goal ->
-                    rect
-                        [ x "0"
-                        , y "0"
-                        , width (String.fromInt boardParams.coordLim)
-                        , height (String.fromInt boardParams.coordLim)
-                        , fill "transparent"
-                        , stroke "yellow"
-                        , strokeWidth "2"
-                        ]
-                        []
+        fullBoardRect =
+            rect
+                [ x "0"
+                , y "0"
+                , rx "1"
+                , ry "1"
+                , width (String.fromInt boardParams.coordLim)
+                , height (String.fromInt boardParams.coordLim)
+                , fill "transparent"
+                , stroke "transparent"
+                , strokeWidth "0"
+                , boardOnClick
+                , boardOnMouseMove
+                ]
+                []
+
+        seed =
+            Random.initialSeed 1
+
+        ( hues, s1 ) =
+            Random.step (Random.list (List.length level.currentBoard) (Random.int 0 255)) seed
     in
     case boardType of
         Play ->
@@ -677,11 +747,12 @@ boardToSvg boardType level boardSize =
                 , height (String.fromInt boardSize)
                 , viewBox (listToString " " [ boardParams.coordLim, boardParams.coordLim, 0, 0 ])
                 ]
-                (List.map pathPolyline board
+                ([ bgRect ]
                     ++ [ boxToSvg playerMinPos "#bbbbbb" "1" ]
+                    ++ List.map2 pathPolyline board hues
                     ++ gridSvg boardParams.coordLim
-                    ++ List.foldr (++) [] (List.map (\x -> pathNodes x boardType) board)
-                    ++ [ boxToSvg boxMinPos "blue" "1" ]
+                    ++ List.foldr (++) [] (List.map2 (\x y -> pathNodes x boardType y) board hues)
+                    ++ [ boxToSvg boxMinPos "#222222" "0.7" ]
                     ++ [ fullBoardRect ]
                 )
 
@@ -691,12 +762,12 @@ boardToSvg boardType level boardSize =
                     level.winBoard
             in
             svg
-                [ width (String.fromInt boardSize)
-                , height (String.fromInt boardSize)
+                [ width (String.fromInt (round (toFloat boardSize / 2)))
+                , height (String.fromInt (round (toFloat boardSize / 2)))
                 , viewBox (listToString " " [ boardParams.coordLim, boardParams.coordLim, 0, 0 ])
                 ]
-                ([ fullBoardRect ]
-                    ++ List.foldr (++) [] (List.map (\x -> pathNodes x boardType) board)
+                ([ bgRect ]
+                    ++ List.foldr (++) [] (List.map2 (\x y -> pathNodes x boardType y) board hues)
                 )
 
 
@@ -713,40 +784,93 @@ winScreen hasWon =
             div [] []
 
 
+startScreenView : Html Msg
+startScreenView =
+    div [ class "screen" ]
+        [ h2 [] [ text "Localise" ]
+        , div [ class "block-text-container" ] [ div [ class "block-text" ] [ text "A game of tangled wires." ] ]
+        , div [ id "start-button" ]
+            [ button [ onClick SeeBoardScreenAction ] [ text "Start" ]
+            ]
+        ]
+
+
+boardScreenView : Model -> Level -> Html Msg
+boardScreenView model level =
+    let
+        finishVisible =
+            case level.hasWonBoard of
+                True ->
+                    "visibility: visible;"
+
+                False ->
+                    "visibility: hidden;"
+    in
+    div [ class "screen" ]
+        [ h2 [ id "board-title" ] [ text "Localise" ]
+        , div [ id "play-board" ]
+            [ boardToSvg Play level model.boardSize ]
+        , div [ id "win-board" ]
+            [ boardToSvg Goal level model.boardSize ]
+        , div [ id "controls" ]
+            [ div [ id "control-container" ]
+                [ div [] [ text ("Time: " ++ String.fromInt model.clockTime) ]
+                , div [] [ text ("Moves: " ++ String.fromInt model.numMoves) ]
+                , div [] [ text ("Level: " ++ String.fromInt model.boardNum ++ "/6") ]
+                ]
+            , button [ id "next-level-button", onClick SeeBoardScreenAction, style finishVisible ] [ text "Next" ]
+            ]
+        ]
+
+
+scoreScreenView : Model -> Html Msg
+scoreScreenView model =
+    let
+        totalScore = (7 * 140 * 1000) // (model.numMoves * model.clockTime)
+    in
+    
+    div [ class "screen" ]
+        [ h2 []
+            [ text "Score" ]
+        , div [ id "score-contrib-container" ]
+            [ div [ class "sc-row" ]
+                [ div [ class "sc-left" ]
+                    [ text "Time" ]
+                , div [ class "sc-right" ]
+                    [ text (String.fromInt model.clockTime) ]
+                ]
+            , div [class "sc-row"] 
+                [div [class "sc-left"]
+                    [text "Moves"]
+                , div [class "sc-right"]
+                    [text (String.fromInt model.numMoves)]]
+            ]
+        , div [id "total-score"] [text (String.fromInt totalScore)]
+        , button [onClick SeeStartScreenAction] [text "Restart"]
+        ]
+
+
 view : Model -> Html Msg
 view model =
     case model.screen of
         StartScreen ->
-            div []
-                [ text "START SCREEN"
-                , button [ onClick SeeBoardScreenAction ] []
-                ]
+            startScreenView
 
         BoardScreen level ->
-            let
-                finishVisible =
-                    case level.hasWonBoard of
-                        True ->
-                            "visible"
-
-                        False ->
-                            "hidden"
-            in
-            div [ class "main-frame" ]
-                [ div [ class "play-board" ]
-                    [ boardToSvg Play level model.boardSize ]
-                , div [ class "win-board" ]
-                    [ boardToSvg Goal level model.boardSize ]
-                , div [ class "controls" ]
-                    [ div []
-                        [ text (String.fromInt model.numMoves)
-                        , button [ onClick SeeBoardScreenAction, visibility finishVisible ] []
-                        ]
-                    ]
-                ]
+            boardScreenView model level
 
         ScoreScreen ->
-            div [] [ text "SCORESCREEN" ]
+            scoreScreenView model
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model.screen of
+        BoardScreen _ ->
+            every 1000 (\x -> TickClock)
+
+        _ ->
+            Sub.none
 
 
 
@@ -759,5 +883,5 @@ main =
         { view = view
         , init = \_ -> ( initialModel, Cmd.none )
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
